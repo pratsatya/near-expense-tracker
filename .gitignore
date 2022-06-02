@@ -1,0 +1,11 @@
+#ignore node modules
+node_modules
+#ignore target debug
+contract/target/debug/
+contract/target/rls/
+#ignore neardev
+neardev/
+#ignore vs workspace
+near-expense-tracker.code-workspace
+commands.txt
+.cache/
