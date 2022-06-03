@@ -8,12 +8,16 @@ edition = "2021"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
-near-sdk = "4.0.0-pre.7"
-uint = { version = "0.8.3", default-features = false }
+# near-sdk = "4.0.0-pre.7"
+# uint = { version = "0.8.3", default-features = false }
+near-sdk = { git = "https://github.com/WildDragonDot/near-contract.git", rev = "fe7e499" }
+near-contract-standards = { git = "https://github.com/WildDragonDot/near-contract.git", rev = "fe7e499" }
 
 [dev-dependencies]
-near-sdk-sim = "4.0.0-pre.7"
-cargo-make = "0.35.12"
+near-sdk = { git = "https://github.com/WildDragonDot/near-contract.git", rev = "fe7e499" }
+near-contract-standards = { git = "https://github.com/WildDragonDot/near-contract.git", rev = "fe7e499" }
+# near-sdk-sim = "4.0.0-pre.7"
+# cargo-make = "0.35.12"
 
 [profile.release]
 codegen-units = 1

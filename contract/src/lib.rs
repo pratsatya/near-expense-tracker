@@ -841,13 +841,6 @@ pub fn refund_deposit(storage_used: u64) {
 
 
 
-
-
-
-
-
-
-
 /*
  * the rest of this file sets up unit tests
  * to run these, the command will be: `cargo test`
@@ -857,88 +850,497 @@ pub fn refund_deposit(storage_used: u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use near_sdk::MockedBlockchain;
-    use near_sdk::json_types::ValidAccountId;
+    // use near_sdk::MockedBlockchain;
     use near_sdk::test_utils::{accounts,VMContextBuilder};
-    use near_sdk::{testing_env, VMContext};
-
-    fn get_context(predecessor_account_id:ValidAccountId) -> VMContextBuilder {
+    use near_sdk::{testing_env};
+    // use near_sdk::{VMContext};
+    
+    // setup context
+    fn get_context(predecessor_account_id:AccountId) -> VMContextBuilder {
         // initialize context
         let mut context_builder = VMContextBuilder::new();
-
-        // VMContext { 
-        //     current_account_id: (), 
-        //     signer_account_id: (), 
-        //     signer_account_pk: (), 
-        //     predecessor_account_id: (), 
-        //     input: (), 
-        //     block_index: (), 
-        //     block_timestamp: (), 
-        //     epoch_height: (), 
-        //     account_balance: (), 
-        //     account_locked_balance: (), 
-        //     storage_usage: (), 
-        //     attached_deposit: (), 
-        //     prepaid_gas: (), 
-        //     random_seed: (), 
-        //     view_config: (), 
-        //     output_data_receivers: () 
-        // }
-
         // setup with values
         context_builder
         .current_account_id(accounts(0))
         .signer_account_id(predecessor_account_id.clone())
         .predecessor_account_id(predecessor_account_id);
-
         // return
         context_builder
     }
+
+    // setup contract
+    fn setup_contract() -> (VMContextBuilder, ExpenseTracker) {
+        let mut context_builder = VMContextBuilder::new();
+        testing_env!(context_builder.predecessor_account_id(accounts(0)).build());
+        let contract = ExpenseTracker::new();
+        (context_builder, contract)
+    }
+
+    // set context, contract and add a trip
+    fn setup_trip() -> (VMContextBuilder, ExpenseTracker) {
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(1))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+        // create trip
+        contract.add_trip(TripMetadata{
+            trip_id:None,
+            trip_name:Some("trip test".to_string()),
+            trip_members:Some(vec![accounts(2),accounts(3)]),
+            });
+
+        (context, contract)
+    }
+
+    // set context, contract and add a trip, and expenses
+    fn setup_expense() -> (VMContextBuilder, ExpenseTracker) {
+        let (context, mut contract) = setup_trip();
+
+        contract.add_trip_expense("1".to_string(),Some("expense 1".to_string()),accounts(2),accounts(3),10000000000000000000000);
+        contract.add_trip_expense("1".to_string(),Some("expense 2".to_string()),accounts(1),accounts(3),90000000000000000000000);
+
+        (context, contract)
+    }
+
+
+
 
     #[test]
     // check new method runs correctly
     fn test_method_new() {
         // get context
-        let mut context = get_context(accounts(1));
+        let context = get_context(accounts(0));
         // set testing env
-        testing_env!(context); 
+        testing_env!(context.build()); 
+        // init contract
         let contract = ExpenseTracker::new();
 
-        // c
-        assert_eq!(env::current_account_id().to_string(), accounts(1).to_string());
-    //     assert_eq!(1, contract.get_num());
+        // tests
+        assert_eq!(env::current_account_id().to_string(), accounts(0).to_string());
+        assert_eq!(contract.storagekey_counter,0);
+        assert_eq!(contract.trip_metadata_by_trip_id.len() + contract.trip_expenses_by_trip_id.len(),0);
     }
 
 
+    #[test]
+    // check add_trip method runs correctly
+    fn test_add_trip() {
+        // get context, contract
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(1))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+
+        // init tests
+        assert_ne!(env::current_account_id().to_string(), env::predecessor_account_id().to_string());
+        assert_eq!(contract.storagekey_counter,0);
+        assert_eq!(contract.trip_metadata_by_trip_id.len() + contract.trip_expenses_by_trip_id.len(),0);
+
+        // test 1
+        let out = contract.add_trip(TripMetadata{
+            trip_id:None,
+            trip_name:Some("trip test".to_string()),
+            trip_members:None,
+        });
+        assert_eq!(out.trip_id.unwrap(),"1");
+        assert_eq!(out.trip_members.unwrap(),vec![accounts(1)]);
+        assert_eq!(out.trip_name.unwrap(),"trip test");
+
+        // test 2
+        let out = contract.add_trip(TripMetadata{
+            trip_id:None,
+            trip_name:Some("trip test".to_string()),
+            trip_members:Some(vec![accounts(2)]),
+            });
+        assert_eq!(out.trip_id.unwrap(),"2");
+        assert_eq!(out.trip_members.unwrap(),vec![accounts(2),accounts(1)]);
+
+        // test 3
+        let out = contract.add_trip(TripMetadata{
+            trip_id:Some("100".to_string()),
+            trip_name:Some("trip test".to_string()),
+            trip_members:None,
+            });
+        assert_eq!(out.trip_id.unwrap(),"3");
+        assert_eq!(out.trip_members.unwrap(),vec![env::predecessor_account_id()]);
+    }
 
 
+    #[test]
+    // check add_trip method fails with no trip name
+    #[should_panic(expected = "trip title is required")]
+    fn test_add_trip_should_fail() {
+        // get context, contract
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(1))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
 
-//     #[test]
-//     fn decrement() {
-//         let mut contract = Counter { val: 0 };
-//         contract.decrement();
-//         assert_eq!(-1, contract.get_num());
-//     }
+        // test 1
+        let _out = contract.add_trip(TripMetadata{
+            trip_id:None,
+            trip_name:None,
+            trip_members:Some(vec![accounts(2)]),
+        });
+    }
 
-//     #[test]
-//     fn increment_and_reset() {
-//         let mut contract = Counter { val: 0 };
-//         contract.increment();
-//         contract.reset();
-//         assert_eq!(0, contract.get_num());
-//     }
 
-//     #[test]
-//     #[should_panic]
-//     fn panics_on_overflow() {
-//         let mut contract = Counter { val: 127 };
-//         contract.increment();
-//     }
+    #[test]
+    // check add_trip_members method runs correctly
+    fn test_add_trip_members() {
+        // get context, contract
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(1))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+        // create trip
+        contract.add_trip(TripMetadata{
+            trip_id:None,
+            trip_name:Some("trip test".to_string()),
+            trip_members:Some(vec![accounts(2)]),
+            });
 
-//     #[test]
-//     #[should_panic]
-//     fn panics_on_underflow() {
-//         let mut contract = Counter { val: -128 };
-//         contract.decrement();
-//     }
+        // test 1
+        let out = contract.add_trip_members("1".to_string(),Some(vec![accounts(3)]));
+        assert_eq!(out.trip_id.unwrap(),"1");
+        assert_eq!(out.trip_members.unwrap(),vec![accounts(2),accounts(1),accounts(3)]); //vec[id in add_trip call, id who called add_trip, id in add_trip_members call]
+        assert_eq!(out.trip_name.unwrap(),"trip test");
+
+        // test 2
+        let out = contract.add_trip_members("1".to_string(),Some(vec![accounts(4),accounts(5)]));
+        assert_eq!(out.trip_members.unwrap(),vec![accounts(2),accounts(1),accounts(3),accounts(4),accounts(5)]);
+    }
+
+
+    #[test]
+    // check add_trip_members method fails with incorect trip id
+    #[should_panic(expected = "trip_id doesn't exist")]
+    fn test_add_trip_members_should_fail_1() {
+        // get context, contract
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(1))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+
+        // test 1
+        contract.add_trip_members("1".to_string(),Some(vec![accounts(3)]));
+    }
+
+
+    #[test]
+    // check add_trip_members method fails since caller not in trip id
+    #[should_panic(expected = "caller id is added in no trips")]
+    fn test_add_trip_members_should_fail_2() {
+        // get context, contract
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(2))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+        // create trip
+        contract.add_trip(TripMetadata{
+            trip_id:None,
+            trip_name:Some("trip test".to_string()),
+            trip_members:Some(vec![accounts(2)]),
+            });
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(3))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+        
+        // test 1
+        contract.add_trip_members("1".to_string(),Some(vec![accounts(4)]));
+    }
+
+
+    #[test]
+    // check add_trip_members method fails since no members provided as param
+    #[should_panic(expected = "no member ids provided by caller")]
+    fn test_add_trip_members_should_fail_3() {
+        // get context, contract
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(2))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+        // create trip
+        contract.add_trip(TripMetadata{
+            trip_id:None,
+            trip_name:Some("trip test".to_string()),
+            trip_members:Some(vec![accounts(2)]),
+            });
+        
+        // test 1
+        contract.add_trip_members("1".to_string(),None);
+    }
+
+
+    #[test]
+    // check add_trip_expense method runs correctly
+    fn test_add_trip_expense() {
+        let (_context, mut contract) = setup_trip();
+
+        // test 1
+        let out = contract.add_trip_expense("1".to_string(),Some("expense 1".to_string()),accounts(2),accounts(3),10000000000000000000000);
+        assert_eq!(out.expense_id.unwrap(),"1");
+        assert_eq!(out.expense_name.unwrap(),"expense 1");
+        assert_eq!(out.loan_amount,10000000000000000000000);
+        assert_eq!(out.lender_id,accounts(3));
+        assert_eq!(out.ower_id,accounts(2));
+
+        // test 2
+        let out = contract.add_trip_expense("1".to_string(),Some("expense 2".to_string()),accounts(2),accounts(1),50000000000000000000000);
+        assert_eq!(out.expense_id.unwrap(),"2");
+        assert_eq!(out.expense_name.unwrap(),"expense 2");
+        assert_eq!(out.loan_amount,50000000000000000000000);
+        assert_eq!(out.lender_id,accounts(1));
+        assert_eq!(out.ower_id,accounts(2));
+    }
+
+
+    #[test]
+    // check add_trip_expense method fails with no trip id existing
+    #[should_panic(expected = "trip_id doesn't exist")]
+    fn test_add_trip_expense_should_fail_1() {
+        // get context, contract
+        let (mut context, mut contract) = setup_contract();
+        // set testing env
+        testing_env!(context
+            .predecessor_account_id(accounts(1))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+
+        // test 1
+        contract.add_trip_expense("1".to_string(),Some("expense 1".to_string()),accounts(2),accounts(1),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check add_trip_expense method fails with no expense name
+    #[should_panic(expected = "expense title is required")]
+    fn test_add_trip_expense_should_fail_2() {
+        // get context, contract
+        let (_context, mut contract) = setup_trip();
+
+        // test 1
+        contract.add_trip_expense("1".to_string(),None,accounts(2),accounts(1),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check add_trip_expense method fails if caller not in trip
+    #[should_panic(expected = "caller id is added in no trips")]
+    fn test_add_trip_expense_should_fail_3() {
+        // get context, contract
+        let (mut context, mut contract) = setup_trip();
+        testing_env!(context
+            .predecessor_account_id(accounts(0))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+
+        // test 1
+        contract.add_trip_expense("1".to_string(),Some("expense 1".to_string()),accounts(2),accounts(1),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check add_trip_expense method fails if lender and owner is same
+    #[should_panic(expected = "lender and ower cannot be same")]
+    fn test_add_trip_expense_should_fail_4() {
+        // get context, contract
+        let (_context, mut contract) = setup_trip();
+
+        // test 1
+        contract.add_trip_expense("1".to_string(),Some("expense 1".to_string()),accounts(2),accounts(2),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check update and delete expense methods runs correctly
+    fn test_update_delete_trip_expense() {
+        // get context, contract
+        let (mut context, mut contract) = setup_expense();
+        testing_env!(context
+            .predecessor_account_id(accounts(3))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+ 
+        // test 1
+        let out = contract.update_trip_expense("1".to_string(),"1".to_string(),Some("expense 1 updated".to_string()),accounts(1),accounts(2),50000000000000000000000);
+        assert_eq!(out.expense_id.unwrap(),"1");
+        assert_eq!(out.expense_name.unwrap(),"expense 1 updated");
+        assert_eq!(out.loan_amount,50000000000000000000000);
+        assert_eq!(out.lender_id,accounts(2));
+        assert_eq!(out.ower_id,accounts(1));
+
+        // test 2
+        let out = contract.update_trip_expense("1".to_string(),"2".to_string(),None,accounts(1),accounts(3),50000000000000000000000);
+        assert_eq!(out.expense_id.unwrap(),"2");
+        assert_eq!(out.expense_name.unwrap(),"expense 2");
+        assert_eq!(out.loan_amount,50000000000000000000000);
+        assert_eq!(out.lender_id,accounts(3));
+        assert_eq!(out.ower_id,accounts(1));
+
+        // test 3
+        let out = contract.delete_trip_expense("1".to_string(),"2".to_string());
+        assert_eq!(out,true);
+    }
+
+
+    #[test]
+    // check update_trip_expense method fails if trip id doesnt exist
+    #[should_panic(expected = "trip_id doesn't exist")]
+    fn test_update_trip_expense_should_fail_1() {
+        // get context, contract
+        let (_context, mut contract) = setup_expense();
+
+        // test 1
+        contract.update_trip_expense("2".to_string(),"1".to_string(),None,accounts(2),accounts(3),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check update_trip_expense method fails if lender and owner are same
+    #[should_panic(expected = "lender and ower cannot be same")]
+    fn test_update_trip_expense_should_fail_2() {
+        // get context, contract
+        let (_context, mut contract) = setup_expense();
+
+        // test 1
+        contract.update_trip_expense("1".to_string(),"1".to_string(),None,accounts(2),accounts(2),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check update_trip_expense method fails if trip has no expenses added
+    #[should_panic(expected = "trip doesn't have any expenses")]
+    fn test_update_trip_expense_should_fail_3() {
+        // get context, contract
+        let (_context, mut contract) = setup_trip();
+
+        // test 1
+        contract.update_trip_expense("1".to_string(),"1".to_string(),None,accounts(2),accounts(3),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check update_trip_expense method fails if trip has no such expense id
+    #[should_panic(expected = "expense_id doesn't exist in trip")]
+    fn test_update_trip_expense_should_fail_4() {
+        // get context, contract
+        let (_context, mut contract) = setup_expense();
+
+        // test 1
+        contract.update_trip_expense("1".to_string(),"10".to_string(),None,accounts(2),accounts(3),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check update_trip_expense method fails since caller is not lender in expense
+    #[should_panic(expected = "cannot edit expense since caller is not current lender")]
+    fn test_update_trip_expense_should_fail_5() {
+        // get context, contract
+        let (mut context, mut contract) = setup_expense();
+        testing_env!(context
+            .predecessor_account_id(accounts(2))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+
+        // test 1
+        contract.update_trip_expense("1".to_string(),"1".to_string(),None,accounts(2),accounts(3),50000000000000000000000);
+    }
+
+
+    #[test]
+    // check delete_trip_expense method fails since caller is not lender in expense
+    #[should_panic(expected = "cannot delete expense since caller is not lender")]
+    fn test_delete_trip_expense_should_fail() {
+        // get context, contract
+        let (mut context, mut contract) = setup_expense();
+        testing_env!(context
+            .predecessor_account_id(accounts(2))
+            .attached_deposit(10000000000000000000000)
+            .build()
+        );
+
+        // test 1
+        contract.delete_trip_expense("1".to_string(),"1".to_string());
+    }
+
+
+    #[test]
+    // check get expense stats by trip id method runs correctly
+    fn test_get_expense_summary_by_trip_id_account_id() {
+        // get context, contract
+        let (_context, mut contract) = setup_trip();
+
+        contract.add_trip_expense("1".to_string(),Some("expense 1".to_string()),accounts(2),accounts(3),100000000000000000000000);
+        contract.add_trip_expense("1".to_string(),Some("expense 2".to_string()),accounts(1),accounts(3),90000000000000000000000);
+        contract.add_trip_expense("1".to_string(),Some("expense 3".to_string()),accounts(1),accounts(2),100000000000000000000000);
+        contract.add_trip_expense("1".to_string(),Some("expense 4".to_string()),accounts(3),accounts(1),900000000000000000000000);
+        contract.add_trip_expense("1".to_string(),Some("expense 5".to_string()),accounts(3),accounts(2),12000000000000000000000);
+        contract.add_trip_expense("1".to_string(),Some("expense 6".to_string()),accounts(3),accounts(1),10000000000000000000000);
+
+        // test 1
+        let out = contract.get_expense_summary_by_trip_id_account_id("1".to_string(),accounts(3));
+        assert_eq!(out.trip_id.unwrap(),"1");
+        assert_eq!(out.trip_name.unwrap(),"trip test");
+        assert_eq!(out.expense_acc_key,vec![accounts(2),accounts(1)]);
+        assert_eq!(out.expense_amt_value,vec![88000000000000000000000, -820000000000000000000000]);
+
+        // test 2
+        let out = contract.get_expense_summary_by_trip_id_account_id("1".to_string(),accounts(1));
+        assert_eq!(out.expense_acc_key,vec![accounts(2),accounts(3)]);
+        assert_eq!(out.expense_amt_value,vec![-100000000000000000000000, 820000000000000000000000]);
+    }
+
+
+    #[test]
+    // check et expense stats by trip id method fails since no expenses present
+    #[should_panic(expected = "trip doesn't have any expenses")]
+    fn test_get_expense_summary_by_trip_id_account_id_should_fail_1() {
+        // get context, contract
+        let (_context, mut contract) = setup_trip();
+
+        // test 1
+        contract.get_expense_summary_by_trip_id_account_id("1".to_string(),accounts(1));
+    }
+
+
+    #[test]
+    // check et expense stats by trip id method fails since account id not in trip
+    #[should_panic(expected = "account id is added in no trips")]
+    fn test_get_expense_summary_by_trip_id_account_id_should_fail_2() {
+        // get context, contract
+        let (_context, mut contract) = setup_expense();
+
+        // test 1
+        contract.get_expense_summary_by_trip_id_account_id("1".to_string(),accounts(4));
+    }
+
 }
