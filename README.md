@@ -27,7 +27,7 @@ See the [Idea whiteboard](NCD-Demo-Idea.pdf).
 
 Go to [scripts](scripts/) to setup and interact with the contract
 
-Watch the [loom]() to know more.
+Watch the [loom](https://www.loom.com/share/21781efda7db4828b289ea4b765515ed) to know more.
 <br /><br />
 
 ## Project Basics and Methods
@@ -58,7 +58,6 @@ near-expense-tracker
 │   │── 2_contract_deploy.sh                        <-- script to build and deploy
 │   │── 3_contract_init.sh                          <-- script to init contract
 │   │── 4_demo_commands.sh                          <-- script to run all contract methods
-│── Getting-Started.loom           <-- loom video demo
 │── NCD_Demo-Idea.pdf              <-- idea whiteboard pdf
 │── package.json                   <-- json config file for yarn commands
 │── README.md                       
